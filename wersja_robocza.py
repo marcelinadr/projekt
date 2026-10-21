@@ -1,4 +1,4 @@
-import re
+ import re
 import pandas as pd
 import streamlit as st
 
@@ -158,7 +158,6 @@ def parse_ics_file(uploaded_file):
       start_str = dtstart_match.group(1)
       end_str = dtend_match.group(1)
 
-      # Proste wyciąganie czasu z formatu iCal (np. 20261008T150000Z)
       try:
         start_dt = pd.to_datetime(start_str, errors="coerce")
         end_dt = pd.to_datetime(end_str, errors="coerce")
@@ -170,7 +169,7 @@ def parse_ics_file(uploaded_file):
         data_dzien = start_str[:8]
         godzina_start = "??:??"
         godzina_end = "??:??"
-        czas_trwania_min = 60  główny fallback
+        czas_trwania_min = 60  # główny fallback
 
       lekcje.append({
           "Data": data_dzien,
@@ -205,7 +204,6 @@ if uploaded_file is not None:
     st.subheader("✨ Gotowa tabela rozliczeniowa miesięczna:")
 
     rozliczone_dane = []
-    # Tworzymy domyślną stawkę (jeśli czas nie pasuje idealnie)
     domyslna_stawka = (
         st.session_state.cennik[0]["Stawka (zł)"]
         if st.session_state.cennik
@@ -214,18 +212,14 @@ if uploaded_file is not None:
 
     for index, row in df_kalendarz.iterrows():
       tytul = row.get("Tytuł wydarzenia", "")
-      minuty = row.get("Czas (min", 60)
-      if "Czas (min)" in row:
-        minuty = row["Czas (min)"]
+      minuty = row.get("Czas (min)", 60)  # <-- TUTAJ BYŁ LITERÓWKA
 
-      # Szukamy pasującej stawki na podstawie czasu trwania w minutach
       znaleziona_stawka = domyslna_stawka
       for c in st.session_state.cennik:
         if c["Czas (min)"] == minuty:
           znaleziona_stawka = c["Stawka (zł)"]
           break
 
-      # Próba dopasowania ucznia z bazy na podstawie tekstu w tytule
       dopasowany_uczen = "Nie przypisano"
       dopasowany_przedmiot = "Nie przypisano"
       for u in st.session_state.uczniowie:
@@ -249,10 +243,8 @@ if uploaded_file is not None:
 
     df_wynikowe = pd.DataFrame(rozliczone_dane)
 
-    # Edytowalna tabela w Streamlit (można zmienić ucznia lub metodę płatności ręcznie!)
     edited_df = st.data_editor(df_wynikowe, hide_index=True, num_rows="dynamic")
 
-    # Podsumowanie finansowe
     calkowity_zarobek = edited_df["Stawka (zł)"].sum()
     st.markdown(f"### 💰 Łącznie do rozliczenia: **{calkowity_zarobek:.2f} zł**")
   else:
