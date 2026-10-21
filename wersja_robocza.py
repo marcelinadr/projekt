@@ -68,46 +68,26 @@ st.write(
 )
 
 # --- SEKCJA 1: KONFIGURACJA STAWEK ---
-st.header("💖 1. Konfiguracja stawek za czas zajęć")
+st.header("💖 1. Konfiguracja stawek")
 
 if "cennik" not in st.session_state:
   st.session_state.cennik = []
 
 with st.form("formularz_stawki"):
-  col1, col2 = st.columns(2)
-  with col1:
-    minuty = st.number_input(
-        "Czas trwania (w minutach)", min_value=15, max_value=240, value=60, step=15
-    )
-  with col2:
-    stawka = st.number_input(
-        "Stawka (w zł) za ten czas", min_value=0.0, value=50.0, step=5.0
-    )
+  stawka_domyslna = st.number_input(
+      "Domyślna stawka za lekcję (w zł)", min_value=0.0, value=50.0, step=5.0
+  )
 
-  submit_button = st.form_submit_button("Dodaj / Zaktualizuj stawkę")
+  submit_button = st.form_submit_button("Zapisz stawkę")
 
   if submit_button:
-    godziny = minuty / 60
-    nowy_wpis = {
-        "Czas (min)": minuty,
-        "Czas (h)": godziny,
-        "Stawka (zł)": stawka,
-    }
-    istnieje = False
-    for wpis in st.session_state.cennik:
-      if wpis["Czas (min)"] == minuty:
-        wpis["Stawka (zł)"] = stawka
-        istnieje = True
-        break
-    if not istnieje:
-      st.session_state.cennik.append(nowy_wpis)
-    st.success(f"Zapisano stawkę {stawka} zł dla czasu {minuty} min!")
+    st.session_state.cennik = [{"Stawka (zł)": stawka_domyslna}]
+    st.success(f"Zapisano stawkę domyślną: {stawka_domyslna} zł!")
 
 if st.session_state.cennik:
-  df_cennik = pd.DataFrame(st.session_state.cennik)
-  st.dataframe(df_cennik, hide_index=True)
+  st.write(f"Aktualna stawka za lekcję: **{st.session_state.cennik[0]['Stawka (zł)']} zł**")
 else:
-  st.info("Brak zdefiniowanych stawek. Dodaj jakąś powyżej!")
+  st.info("Brak zdefiniowanej stawki. Ustaw ją powyżej!")
 
 
 # --- SEKCJA 2: BAZA UCZNIÓW I PRZEDMIOTÓW ---
@@ -149,33 +129,25 @@ def parse_ics_file(uploaded_file):
   for event in vevents[1:]:
     summary_match = re.search(r"SUMMARY:(.*?)(?:\r?\n|$)", event)
     dtstart_match = re.search(r"DTSTART(?:;[^:]+)?:([0-9TZ]+)", event)
-    dtend_match = re.search(r"DTEND(?:;[^:]+)?:([0-9TZ]+)", event)
 
-    if summary_match and dtstart_match and dtend_match:
+    if summary_match and dtstart_match:
       tytul = summary_match.group(1).strip()
       tytul = tytul.replace("\\,", ",").replace("\\;", ";")
 
       start_str = dtstart_match.group(1)
-      end_str = dtend_match.group(1)
 
       try:
         start_dt = pd.to_datetime(start_str, errors="coerce")
-        end_dt = pd.to_datetime(end_str, errors="coerce")
         data_dzien = start_dt.strftime("%Y-%m-%d")
-        godzina_start = start_dt.strftime("%H:%M")
-        godzina_end = end_dt.strftime("%H:%M")
-        czas_trwania_min = int((end_dt - start_dt).total_seconds() / 60)
+        godzina = start_dt.strftime("%H:%M")
       except:
         data_dzien = start_str[:8]
-        godzina_start = "??:??"
-        godzina_end = "??:??"
-        czas_trwania_min = 60  # główny fallback
+        godzina = "??:??"
 
       lekcje.append({
           "Data": data_dzien,
-          "Godzina": f"{godzina_start} - {godzina_end}",
+          "Godzina": godzina,
           "Tytuł wydarzenia": tytul,
-          "Czas (min)": czas_trwania_min,
       })
 
   return pd.DataFrame(lekcje)
@@ -212,14 +184,8 @@ if uploaded_file is not None:
 
     for index, row in df_kalendarz.iterrows():
       tytul = row.get("Tytuł wydarzenia", "")
-      minuty = row.get("Czas (min)", 60)  # <-- TUTAJ BYŁ LITERÓWKA
 
-      znaleziona_stawka = domyslna_stawka
-      for c in st.session_state.cennik:
-        if c["Czas (min)"] == minuty:
-          znaleziona_stawka = c["Stawka (zł)"]
-          break
-
+      # Dopasowanie ucznia z bazy na podstawie tekstu w tytule
       dopasowany_uczen = "Nie przypisano"
       dopasowany_przedmiot = "Nie przypisano"
       for u in st.session_state.uczniowie:
@@ -233,18 +199,20 @@ if uploaded_file is not None:
 
       rozliczone_dane.append({
           "Data": row.get("Data", "Brak"),
+          "Godzina": row.get("Godzina", ""),
           "Uczeń": dopasowany_uczen,
           "Przedmiot": dopasowany_przedmiot,
           "Tytuł w kalendarzu": tytul,
-          "Czas (min)": minuty,
-          "Stawka (zł)": znaleziona_stawka,
+          "Stawka (zł)": domyslna_stawka,
           "Metoda płatności": "Przelew",
       })
 
     df_wynikowe = pd.DataFrame(rozliczone_dane)
 
+    # Edytowalna tabela w Streamlit
     edited_df = st.data_editor(df_wynikowe, hide_index=True, num_rows="dynamic")
 
+    # Podsumowanie finansowe
     calkowity_zarobek = edited_df["Stawka (zł)"].sum()
     st.markdown(f"### 💰 Łącznie do rozliczenia: **{calkowity_zarobek:.2f} zł**")
   else:
