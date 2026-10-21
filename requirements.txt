@@ -1,2 +1,5 @@
 streamlit
 pandas
+icalendar
+recurring-ical-events
+tzdata
